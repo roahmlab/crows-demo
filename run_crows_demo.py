@@ -11,6 +11,8 @@ from planning.crows.crows_urdf import CROWS_3D_planner
 from planning.common.waypoints import GoalWaypointGenerator, CustomWaypointGenerator
 from visualizations.sphere_viz import SpherePlannerViz
 import os
+import csv
+
 T_PLAN, T_FULL = 0.5, 1.0
 
 
@@ -26,12 +28,33 @@ def evaluate_planner(planner,
 
 
     ############  NOTE ############
-    theta = [np.pi/180*(-30), np.pi/180*(60)] # Rotation angles of the obstacles w.r.t. the z-axis, shape (n_obs,)
-    obs_pos = [[0.5,0.2,0.1], [-0.5,0.2,0.1]] # Positions of the obstacles as rows of xyz coordinates, shape (n_obs, 3)
-    obs_size = [[0.5,0.2,0.2], [0.8,0.1,0.2]] # Sizes of the obstacles as rows of xyz dimensions, shape (n_obs, 3)
-    qstart = np.array([2.796017461694916, 0.6283185307179586, 0.15707963267948966, 0.6785840131753953, -0.3141592653589793, 0.7005751617505239, 0]) # Initial configuration, shape (7,)
-    qgoal = np.array([2.7991590543485056, 0.38327430373795474, 0.15707963267948966, 0.47752208334564855, -0.3141592653589793, 0.6723008278682158, 0]) # Goal configuration, shape (7,)
-    waypoints = None  # Optional: Intermediate waypoints from the initial to goal configuration, shape (num_waypoints, 7)
+    obs_pos = []
+    obs_size = []
+    configs = []
+    with open('living_room/living_room_obstacles.csv', mode ='r') as file:   
+        csvFile = csv.reader(file)
+        for line in csvFile:
+                obs_pos.append([float(num) for num in line][:3])
+                obs_size.append([float(num) for num in line][3:6])
+    with open('living_room/living_room_config.csv', mode ='r') as file:   
+        csvFile = csv.reader(file)
+        for line in csvFile:
+                configs.append([float(num) for num in line][:7])
+    
+    configs = np.array(configs)
+    theta = [0]*len(obs_pos)
+
+    qstart = configs[0]
+    qgoal = configs[-1]
+    waypoints = configs[1:]
+
+    #theta = [np.pi/180*(-30), np.pi/180*(60)] # Rotation angles of the obstacles w.r.t. the z-axis, shape (n_obs,)
+    #obs_pos = [[0.5,0.2,0.1], [-0.5,0.2,0.1]] # Positions of the obstacles as rows of xyz coordinates, shape (n_obs, 3)
+    #obs_size = [[0.5,0.2,0.2], [0.8,0.1,0.2]] # Sizes of the obstacles as rows of xyz dimensions, shape (n_obs, 3)
+    
+    # qstart = np.array([2.796017461694916, 0.6283185307179586, 0.15707963267948966, 0.6785840131753953, -0.3141592653589793, 0.7005751617505239, 0]) # Initial configuration, shape (7,)
+    # qgoal = np.array([2.7991590543485056, 0.38327430373795474, 0.15707963267948966, 0.47752208334564855, -0.3141592653589793, 0.6723008278682158, 0]) # Goal configuration, shape (7,)
+    # waypoints = None  # Optional: Intermediate waypoints from the initial to goal configuration, shape (num_waypoints, 7)
     # NOTE: len(theta), len(obs_pos), len(obs_size) should match
     ############  NOTE ############
 
