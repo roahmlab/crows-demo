@@ -232,6 +232,7 @@ def read_params():
     # general setting
     parser.add_argument("--planner", type=str, default="crows") # "crows", "armtd", "sphere"
     parser.add_argument('--robot_type', type=str, default="branched")
+    parser.add_argument('--n_robots', type=int, default=1)
     parser.add_argument('--n_links', type=int, default=7)
     parser.add_argument('--n_dims', type=int, default=3)
     parser.add_argument('--n_obs', type=int, default=5)
@@ -273,10 +274,12 @@ if __name__ == '__main__':
     assert params.dtype ==32 or params.dtype == 64
     dtype = torch.float32 if params.dtype == 32 else torch.float64
 
-    print(f"Running {params.n_envs}trials of {planner_name} 3D{params.n_links}Links{params.n_obs}obs with {params.n_steps} step limit and {params.time_limit}s time limit each step")
+    n_links = params.n_links * params.n_robots
+
+    print(f"Running {params.n_envs}trials of {planner_name} 3D{n_links}Links{params.n_obs}obs with {params.n_steps} step limit and {params.time_limit}s time limit each step")
     print(f"Using device {device}")
     
-    planning_result_dir = f'planning_results/3d{params.n_links}links{params.n_obs}obs'
+    planning_result_dir = f'planning_results/3d{n_links}links{params.n_obs}obs'
     if not os.path.exists(planning_result_dir):
         os.makedirs(planning_result_dir)
     
@@ -284,9 +287,13 @@ if __name__ == '__main__':
     import zonopyrobots as robots2
     robots2.DEBUG_VIZ = False
     basedirname = os.path.dirname(robots2.__file__)
-    robot_path = 'robots/assets/robots/kinova_arm/gen3.urdf'
-    rob = robots2.ZonoArmRobot.load(os.path.join(basedirname, robot_path), dtype = dtype, device=device, create_joint_occupancy=True)
-
+    name_mapping = {2: "two", 3: "three"}
+    if params.n_robots in name_mapping:
+        robot_path = f'robots/assets/robots/kinova_arm/kinova_{name_mapping[params.n_robots]}_arm_{params.robot_type}.urdf'
+    else:
+        robot_path = 'robots/assets/robots/kinova_arm/gen3.urdf'
+    rob = robots2.ZonoArmRobot.load(os.path.join(basedirname, robot_path), device=device, create_joint_occupancy=True)
+    import pdb;pdb.set_trace()
     if planner_name == 'armtd':
         planner = ARMTD_3D_planner(
             rob, 
@@ -299,7 +306,7 @@ if __name__ == '__main__':
             planner_name=f'armtd_{params.robot_type}_t{params.time_limit}_tol{params.tol}', 
             n_envs=params.n_envs, 
             n_steps=params.n_steps, 
-            n_links=params.n_links, 
+            n_links=n_links, 
             n_obs=params.n_obs,
             save_success_trial_id=params.save_success, 
             video=params.video,
@@ -311,7 +318,7 @@ if __name__ == '__main__':
         )
         
     if planner_name == 'sphere' or planner_name == 'crows':
-        joint_radius_override = {
+        joint_radius_override_base = {
                 'joint_1': torch.tensor(0.0503305, dtype=torch.float, device=device),
                 'joint_2': torch.tensor(0.0630855, dtype=torch.float, device=device),
                 'joint_3': torch.tensor(0.0463565, dtype=torch.float, device=device),
@@ -321,6 +328,13 @@ if __name__ == '__main__':
                 'joint_7': torch.tensor(0.0364255, dtype=torch.float, device=device),
                 'end_effector': torch.tensor(0.0394685, dtype=torch.float, device=device),
             }
+        if params.n_robots > 1:
+            joint_radius_override = {}
+            for i_robot in range(params.n_robots):
+                for k, v in joint_radius_override_base.items():
+                    joint_radius_override[k + f'_rob{i_robot+1}'] = v
+        else:
+            joint_radius_override = joint_radius_override_base
         if planner_name == 'sphere':
             planner = SPARROWS_3D_planner(
                 rob, 
@@ -336,7 +350,7 @@ if __name__ == '__main__':
                 planner_name=f'sphere_{params.robot_type}_t{params.time_limit}_tol{params.tol}', 
                 n_envs=params.n_envs, 
                 n_steps=params.n_steps, 
-                n_links=params.n_links, 
+                n_links=n_links, 
                 n_obs=params.n_obs,
                 save_success_trial_id=params.save_success, 
                 video=params.video,
@@ -368,7 +382,7 @@ if __name__ == '__main__':
                 planner_name=f'crows_conf{params.confidence_idx}{learned_grad_identifier}_{params.robot_type}_t{params.time_limit}_tol{params.tol}', 
                 n_envs=params.n_envs, 
                 n_steps=params.n_steps, 
-                n_links=params.n_links, 
+                n_links=n_links, 
                 n_obs=params.n_obs,
                 save_success_trial_id=params.save_success, 
                 video=params.video,
