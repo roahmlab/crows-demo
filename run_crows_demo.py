@@ -7,6 +7,7 @@ import random
 from tqdm import tqdm
 from environments.urdf_obstacle import KinematicUrdfWithObstacles
 from environments.fullstep_recorder import FullStepRecorder
+from planning.sparrows.sparrows_urdf import SPARROWS_3D_planner
 from planning.crows.crows_urdf import CROWS_3D_planner
 from planning.common.waypoints import GoalWaypointGenerator, CustomWaypointGenerator
 from visualizations.sphere_viz import SpherePlannerViz
@@ -42,6 +43,10 @@ def evaluate_planner(planner,
                 configs.append([float(num) for num in line][:7])
     
     configs = np.array(configs)
+    configs = (configs + np.pi) % (2 * np.pi) - np.pi
+
+    obs_pos = obs_pos[:-1]
+    obs_size = obs_size[:-1]
     theta = [0]*len(obs_pos)
 
     qstart = configs[0]
@@ -110,7 +115,8 @@ def evaluate_planner(planner,
         video_path = os.path.join(save_folder, 'video.mp4')
         video_recorder = FullStepRecorder(env, path=video_path)
 
-    force_fail_safe = False    
+    force_fail_safe = False 
+    was_stuck = False   
     for _ in range(n_steps):
         qpos, qvel, qgoal = obs['qpos'], obs['qvel'], obs['qgoal']
         obstacles = (np.asarray(obs['obstacle_pos']), np.asarray(obs['obstacle_size']), np.asarray(obs['obstacle_rot']))
@@ -139,13 +145,32 @@ def evaluate_planner(planner,
 
         obs, reward, done, info = env.step(ka)
 
-        if done:
-            trajectory['qpos'].append(obs['qpos'])
-            trajectory['qvel'].append(obs['qvel'])
-            break
 
         if video:
             video_recorder.capture_frame()
+
+        if done:
+            trajectory['qpos'].append(obs['qpos'])
+            trajectory['qvel'].append(obs['qvel'])
+
+            if info['collision_info']['in_collision']:
+                print('Collision!')
+            elif reward == 1:
+                print('Success')
+            else:
+                print('Terminated')
+            break
+
+        if flag != 0:
+            if was_stuck:
+                print('Stuck!')
+                break
+            else:
+                was_stuck = True
+        else:
+            was_stuck = False
+
+
         
 
     if video:
@@ -235,6 +260,15 @@ if __name__ == '__main__':
         confidence_idx = params.confidence_idx
     )
 
+    # planner = SPARROWS_3D_planner(
+    #     rob, 
+    #     dtype = dtype,
+    #     device=device, 
+    #     sphere_device=device, 
+    #     spheres_per_link=params.num_spheres,
+    #     joint_radius_override=joint_radius_override,
+    #     linear_solver=params.solver,
+    # )
 
     evaluate_planner(
         planner=planner, 
