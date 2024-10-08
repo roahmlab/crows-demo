@@ -144,7 +144,7 @@ class CROWS_3D_planner():
         }
         return self.CROWS_constraint, out_times
 
-    def trajopt(self, qpos, qvel, waypoint, ka_0, CROWS_constraint, time_limit=None, t_final_thereshold=0., tol=1e-5):
+    def trajopt(self, qpos, qvel, waypoint, ka_0, CROWS_constraint, time_limit=None, t_final_thereshold=0., tol=1e-5, ka_range=1.0):
         self.nlp_problem_obj.reset(qpos, qvel, waypoint.pos, CROWS_constraint, t_final_thereshold=t_final_thereshold, qdgoal=waypoint.vel)
         n_constraints = self.nlp_problem_obj.M
 
@@ -152,8 +152,8 @@ class CROWS_3D_planner():
         n = self.dof,
         m = n_constraints,
         problem_obj=self.nlp_problem_obj,
-        lb = [-1]*self.dof,
-        ub = [1]*self.dof,
+        lb = [-ka_range]*self.dof,
+        ub = [ka_range]*self.dof,
         cl = [-1e20]*n_constraints,
         cu = [-1e-6]*n_constraints,
         )
@@ -178,7 +178,7 @@ class CROWS_3D_planner():
         self.final_cost = self.info['obj_val'] if self.info['status'] == 0 else None      
         return CROWS_constraint.g_ka * k_opt, self.info['status'], self.nlp_problem_obj.constraint_times
         
-    def plan(self,qpos, qvel, waypoint, obs, ka_0 = None, time_limit=None, t_final_thereshold=0., tol=1e-5):
+    def plan(self,qpos, qvel, waypoint, obs, ka_0 = None, time_limit=None, t_final_thereshold=0., tol=1e-5, ka_range=1.0):
         '''Plan a trajectory for the robot
 
         Args:
@@ -230,7 +230,7 @@ class CROWS_3D_planner():
             time_limit -= preparation_time
             
         trajopt_time = time.perf_counter()
-        k_opt, flag, constraint_times = self.trajopt(qpos, qvel, waypoint, ka_0, CROWS_constraint, time_limit=time_limit, t_final_thereshold=t_final_thereshold, tol=tol)
+        k_opt, flag, constraint_times = self.trajopt(qpos, qvel, waypoint, ka_0, CROWS_constraint, time_limit=time_limit, t_final_thereshold=t_final_thereshold, tol=tol, ka_range=ka_range)
         trajopt_time = time.perf_counter() - trajopt_time
         
         timing_stats = {
