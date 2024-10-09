@@ -150,6 +150,7 @@ class ReachableSetGenerator():
         else:
             # Slice centers based on the trajectory parameters
             centers = centers_bpz.center_slice_all_dep(batched_traj_param)
+            import pdb;pdb.set_trace()
             return centers.permute(1, 2, 0, 3)[:, :, 1:], radii.permute(1, 2, 0)[:, :, 1:] # Shape: (batch_size, timesteps, dof, dimension), (batch_size, timesteps, dof)
         # [:,:,1:] is for excluding a base joint, which is constant.
 
@@ -299,6 +300,8 @@ def read_params():
     parser.add_argument('--dtype', type=int, default=32, help="Data type: 32 for float32, 64 for float64")
     parser.add_argument('--seed', type=int, default=0, help="Random seed for data generation")
     parser.add_argument('--robot_name', type=str, default='kinova_gen3', help="Name of the robot")
+    parser.add_argument('--include_camera', action='store_true', help="Flag to include camera component in URDF")
+    
     parser.add_argument('--grad', action='store_true', help="Flag to generate gradient data")
     parser.add_argument('--data_size', type=int, default=int(1e6), help="Total number of samples to generate")
     return parser.parse_args()
@@ -318,13 +321,18 @@ def main():
     
     # Load the robot model and set the visualization flag
     zpr.DEBUG_VIZ = False # Disable debugging visualization
-    zpr_dirname = os.path.dirname(zpr.__file__)  # Get the directory of the zpr module
+    
     if params.robot_name == 'kinova_gen3':
-        robot_path = 'robots/assets/robots/kinova_arm/gen3.urdf'
+        if params.include_camera:
+            robot_path = os.path.join(os.path.dirname(__file__), os.pardir, 'kinova_gen3_camera/gen3_camera.urdf')
+        else:
+            zpr_dirname = os.path.dirname(zpr.__file__)  # Get the directory of the zpr module
+            robot_path = os.path.join(zpr_dirname, 'robots/assets/robots/kinova_arm/gen3.urdf')
+        
     
     # Load the robot model, specifying data type and device, and initialize joint occupancy
     robot = zpr.ZonoArmRobot.load(
-        os.path.join(zpr_dirname, robot_path), 
+        robot_path, 
         dtype=dtype, 
         device=device, 
         create_joint_occupancy=True
@@ -340,16 +348,31 @@ def main():
     file_path = os.path.join(save_dirname,f'{params.robot_name}_so'+('_grad' if params.grad else '')+'.hdf5')
 
     # Set Joint Radius Override
-    joint_radius_override = {
-            'joint_1': torch.tensor(0.0503305, dtype=dtype, device=device),
-            'joint_2': torch.tensor(0.0630855, dtype=dtype, device=device),
-            'joint_3': torch.tensor(0.0463565, dtype=dtype, device=device),
-            'joint_4': torch.tensor(0.0634475, dtype=dtype, device=device),
-            'joint_5': torch.tensor(0.0352165, dtype=dtype, device=device),
-            'joint_6': torch.tensor(0.0542545, dtype=dtype, device=device),
-            'joint_7': torch.tensor(0.0364255, dtype=dtype, device=device),
-            'end_effector': torch.tensor(0.0394685, dtype=dtype, device=device),
-        }
+    if params.include_camera:
+        joint_radius_override = {
+                    'joint_1': torch.tensor(0.0503305, dtype=dtype, device=device),
+                    'joint_2': torch.tensor(0.0630855, dtype=dtype, device=device),
+                    'joint_3': torch.tensor(0.0463565, dtype=dtype, device=device),
+                    'joint_4': torch.tensor(0.0634475, dtype=dtype, device=device),
+                    'joint_5': torch.tensor(0.0352165, dtype=dtype, device=device),
+                    'joint_6': torch.tensor(0.0542545, dtype=dtype, device=device),
+                    'joint_7': torch.tensor(0.0364255, dtype=dtype, device=device),
+                    'end_effector': torch.tensor(0.0394685, dtype=dtype, device=device),
+                    'psuedo_camera_module_1': torch.tensor(0.04, dtype=dtype, device=device),
+                    'psuedo_camera_module_2': torch.tensor(0.04, dtype=dtype, device=device),
+            }
+
+    else:
+        joint_radius_override = {
+                'joint_1': torch.tensor(0.0503305, dtype=dtype, device=device),
+                'joint_2': torch.tensor(0.0630855, dtype=dtype, device=device),
+                'joint_3': torch.tensor(0.0463565, dtype=dtype, device=device),
+                'joint_4': torch.tensor(0.0634475, dtype=dtype, device=device),
+                'joint_5': torch.tensor(0.0352165, dtype=dtype, device=device),
+                'joint_6': torch.tensor(0.0542545, dtype=dtype, device=device),
+                'joint_7': torch.tensor(0.0364255, dtype=dtype, device=device),
+                'end_effector': torch.tensor(0.0394685, dtype=dtype, device=device),
+            }
 
     # Initialize the ReachableSetGenerator
     so_generator = ReachableSetGenerator(
